@@ -1,4 +1,4 @@
-import { runPipeline } from './src/agent/pipeline.js';
+import { runPipeline } from '../src/agent/pipeline.js';
 
 const CHAT = `
 用户：我在用 React 做一个列表页，数据量很大，滚动时非常卡顿，怎么优化？

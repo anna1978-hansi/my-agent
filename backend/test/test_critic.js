@@ -1,4 +1,4 @@
-import { critiqueNote } from './src/agent/critic.js';
+import { critiqueNote } from '../src/agent/critic.js';
 
 const CHAT = `
 用户：我的 Node.js 程序一直报这个错误：

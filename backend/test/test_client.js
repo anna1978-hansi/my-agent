@@ -1,4 +1,4 @@
-import { callLLM } from './src/llm/client.js';
+import { callLLM } from '../src/llm/client.js';
 
 console.log('🧪 开始测试 callLLM...\n');
 

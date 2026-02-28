@@ -1,4 +1,4 @@
-import { saveNote, searchNotes } from './src/db/notes.js';
+import { saveNote, searchNotes } from '../src/db/notes.js';
 
 console.log('🧪 ===== Task 3.3 DB 测试开始 =====\n');
 

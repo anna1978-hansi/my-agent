@@ -1,4 +1,4 @@
-import { routeIntent } from './src/agent/router.js';
+import { routeIntent } from '../src/agent/router.js';
 
 const BUGFIX_CHAT = `
 用户：我的 Node.js 程序一直报这个错误，不知道怎么解决：

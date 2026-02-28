@@ -1,4 +1,4 @@
-import { extractKnowledge } from './src/agent/worker.js';
+import { extractKnowledge } from '../src/agent/worker.js';
 
 const BUGFIX_CHAT = `
 用户：我的 Node.js 程序一直报这个错误：
