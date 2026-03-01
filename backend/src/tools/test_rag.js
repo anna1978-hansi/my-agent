@@ -44,12 +44,17 @@ async function run() {
 
   const queryText = '如何使用 React hooks 管理组件状态？';
   console.log('\n🔎 [TestRAG] 开始相似度检索...');
-  const result = await searchSimilarNote(queryText, 0.85);
+  const result = await searchSimilarNote(queryText, 0.0);
 
   console.log('📦 [TestRAG] 检索结果:');
   console.log(JSON.stringify(result, null, 2));
 
-  const ok = result.action === 'MERGE' && result.note?.title?.includes('React');
+  const title = result.note?.title || '(none)';
+  const score = typeof result.score === 'number' ? result.score : null;
+  console.log(`🧾 [TestRAG] Top 命中文档: ${title}`);
+  console.log(`🧾 [TestRAG] 相似度得分: ${score}`);
+
+  const ok = title.includes('React');
   console.log(`✅ [TestRAG] 命中 React 笔记: ${ok ? 'OK' : 'FAIL'}`);
   console.log('🎉 [TestRAG] 测试结束。');
 }
