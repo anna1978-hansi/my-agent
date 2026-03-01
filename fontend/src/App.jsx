@@ -1,327 +1,714 @@
-import { useState, useEffect, useRef } from 'react'
-import './App.css'
+import { useEffect, useMemo, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import './App.css';
+import {
+  applyMerge,
+  commitCreate,
+  getNoteDetail,
+  getNotes,
+  processChat,
+} from './services/api';
+import {
+  buildMergeSession,
+  updateAllHunkState,
+  updateHunkState,
+} from './utils/diff';
 
-// ── 输入面板 ──────────────────────────────────────────────
-const MODES = [
-  { value: 'card', label: '📝 结构化知识卡片' },
-  { value: 'deep', label: '🔍 原理与源码深挖' },
-  { value: 'pitfall', label: '⚠️ 常见误区与避坑' },
-  { value: 'note', label: '🧠 生成学习笔记' },
-]
-
-function InputPanel({ inputText, onInputChange, mode, onModeChange, onSubmit, loading }) {
-  const tokenEstimate = Math.floor(inputText.length * 0.6)
-
-  return (
-    <div className="w-1/2 flex flex-col gap-4 bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-      <div className="flex justify-between items-end">
-        <label className="text-sm font-medium text-gray-700">粘贴原始对话片段 (Raw Chat)</label>
-        <span className="text-xs text-gray-400">预估: {tokenEstimate} Tokens</span>
-      </div>
-
-      <textarea
-        className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-none font-mono text-sm text-gray-600"
-        placeholder={"User: 为什么我的 useEffect 一直无限循环？\n\nAssistant: 这通常是因为你在依赖数组中放入了每次渲染都会改变的引用类型对象..."}
-        value={inputText}
-        onChange={e => onInputChange(e.target.value)}
-      />
-
-      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Agent 整理模式 (Strategy)</label>
-        <div className="grid grid-cols-2 gap-3">
-          {MODES.map(m => (
-            <label key={m.value} className="flex items-center space-x-2 cursor-pointer">
-              <input
-                type="radio"
-                name="mode"
-                value={m.value}
-                checked={mode === m.value}
-                onChange={() => onModeChange(m.value)}
-                className="text-emerald-500 focus:ring-emerald-500"
-              />
-              <span className="text-sm">{m.label}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      <button
-        onClick={onSubmit}
-        disabled={loading}
-        className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium rounded-lg shadow-sm transition flex justify-center items-center gap-2"
-      >
-        {loading ? (
-          <>
-            <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
-            Agent 运行中...
-          </>
-        ) : (
-          <>
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            启动 Agent 提炼流水线
-          </>
-        )}
-      </button>
-    </div>
-  )
-}
-
-// ── 输出面板 ──────────────────────────────────────────────
-const LOADING_STEPS = [
-  '▶ Stage 1: Router 意图分析中... Done',
-  '▶ Stage 2: 触发 Worker 提取与强 Schema 校验...',
+const AGENT_STAGES = [
+  '▶ Stage 1: Router 意图分析中...',
+  '▶ Stage 2: Worker 结构化提取与 Schema 校验...',
   '▶ Stage 3: Critic 审查与自我纠错中...',
-]
-
-function EmptyState() {
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
-      <svg className="w-16 h-16 mb-4 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-      </svg>
-      <p>等待知识注入...</p>
-    </div>
-  )
-}
-
-function LoadingState({ visibleSteps }) {
-  return (
-    <div className="absolute inset-0 bg-slate-900 z-20 flex flex-col p-8 font-mono text-sm text-green-400">
-      <div className="mb-4 text-gray-400">[System] Initiating Agent Core Pipeline...</div>
-      {LOADING_STEPS.map((text, i) => (
-        visibleSteps > i && (
-          <div key={i} className="mb-2">
-            {text} {i === 0 && <span className="text-yellow-400">Done</span>}
-          </div>
-        )
-      ))}
-      {visibleSteps >= 3 && (
-        <div className="mt-4 text-white typing">持久化至 SQLite 并生成 RAG 预留索引...</div>
-      )}
-    </div>
-  )
-}
+  '▶ Stage 4: Executor 决策 CREATE / MERGE...',
+];
 
 const INTENT_META = {
-  BugFix:       { label: '🐛 Bug 修复',  color: 'bg-red-100 text-red-700' },
-  Concept:      { label: '💡 概念解析',  color: 'bg-blue-100 text-blue-700' },
-  Architecture: { label: '🏗️ 架构选型', color: 'bg-purple-100 text-purple-700' },
-}
+  BugFix: 'BugFix',
+  Concept: 'Concept',
+  Architecture: 'Architecture',
+};
 
-function ResultCard({ result }) {
-  const { intent, confidence, score, retries, data } = result
-  const meta = INTENT_META[intent] ?? { label: intent, color: 'bg-gray-100 text-gray-700' }
-  const fields = Object.entries(data).filter(([k]) => k !== 'title' && k !== 'tags')
-  const borderColors = ['border-emerald-500', 'border-blue-500', 'border-purple-500', 'border-yellow-500', 'border-rose-500']
-
+function Sidebar({
+  notes,
+  loading,
+  searchKeyword,
+  onSearchChange,
+  selectedNoteId,
+  onSelectNote,
+}) {
   return (
-    <div className="flex-1 flex flex-col p-6 overflow-y-auto fade-in">
-      {/* 标题区 */}
-      <div className="mb-4">
-        <div className="flex items-center gap-2 mb-2 flex-wrap">
-          <span className={`px-2 py-1 text-xs rounded font-medium ${meta.color}`}>{meta.label}</span>
-          <span className="text-xs text-gray-400">置信度 {Math.round(confidence * 100)}%</span>
-          <span className={`text-xs font-medium ${score >= 80 ? 'text-emerald-600' : 'text-yellow-600'}`}>
-            Critic 评分 {score}
-          </span>
-          {retries > 0 && <span className="text-xs text-gray-400">重试 {retries} 次</span>}
-        </div>
-        <h2 className="text-2xl font-bold text-gray-800">{data.title}</h2>
+    <aside className="w-72 shrink-0 border-r border-slate-800/70 bg-[radial-gradient(120%_120%_at_0%_0%,#213457_0%,#0d1526_45%,#080d18_100%)] text-slate-100">
+      <div className="border-b border-slate-700/60 p-5">
+        <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">BranchNote</p>
+        <h1 className="mt-2 text-xl font-semibold tracking-tight">Local Knowledge Forge</h1>
+        <p className="mt-2 text-xs text-slate-300/70">可见化你的 AI 对话沉淀</p>
       </div>
 
-      {/* Tags */}
-      {data.tags?.length > 0 && (
-        <div className="flex gap-2 mb-6 border-b border-gray-100 pb-4 flex-wrap">
-          {data.tags.map(tag => (
-            <span key={tag} className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">#{tag}</span>
-          ))}
-        </div>
-      )}
-
-      {/* 字段区 */}
-      <div className="space-y-5">
-        {fields.map(([key, value], i) => (
-          <div key={key}>
-            <h3 className={`text-sm font-bold text-gray-700 mb-2 border-l-4 ${borderColors[i % borderColors.length]} pl-2`}>
-              {key}
-            </h3>
-            <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
-              {Array.isArray(value)
-                ? <ul className="list-disc list-inside space-y-1">{value.map((v, j) => <li key={j}>{String(v)}</li>)}</ul>
-                : typeof value === 'object' && value !== null
-                  ? <pre className="whitespace-pre-wrap text-xs">{JSON.stringify(value, null, 2)}</pre>
-                  : String(value)
-              }
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function OutputPanel({ status, visibleSteps, resultData }) {
-  return (
-    <div className="w-1/2 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col relative overflow-hidden">
-      {status === 'idle' && <EmptyState />}
-      {status === 'loading' && <LoadingState visibleSteps={visibleSteps} />}
-      {status === 'success' && resultData && <ResultCard result={resultData} />}
-      {status === 'error' && (
-        <div className="flex-1 flex flex-col items-center justify-center text-red-400 p-8 text-center">
-          <p className="text-lg font-medium mb-2">处理失败</p>
-          <p className="text-sm text-gray-500">{resultData?.message || '请检查后端服务是否启动'}</p>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── 左侧边栏 ──────────────────────────────────────────────
-function Sidebar() {
-  const mockNotes = [
-    { id: 1, title: 'React Hooks 闭包陷阱', tag: '前端', active: true },
-    { id: 2, title: 'Docker 网络模式梳理', tag: '运维', active: false },
-  ]
-
-  return (
-    <aside className="w-64 bg-slate-900 text-gray-300 flex flex-col shrink-0">
-      {/* Logo */}
-      <div className="p-5 border-b border-slate-700">
-        <h1 className="text-xl font-bold text-white flex items-center gap-2">
-          <svg className="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-          </svg>
-          BranchNote
-        </h1>
-        <p className="text-xs text-slate-400 mt-1">Local AI Knowledge Agent</p>
-      </div>
-
-      {/* 搜索框 */}
       <div className="p-4">
         <input
-          type="text"
-          placeholder="全局检索 (MVP)..."
-          className="w-full bg-slate-800 text-sm text-white rounded px-3 py-2 border border-slate-700 focus:outline-none focus:border-emerald-500"
+          value={searchKeyword}
+          onChange={event => onSearchChange(event.target.value)}
+          placeholder="搜索标题、标签或内容..."
+          className="w-full rounded-xl border border-slate-600/50 bg-slate-950/40 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus:border-cyan-400 focus:outline-none"
         />
       </div>
 
-      {/* 知识库列表 */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">本地知识库</h3>
-        <ul className="space-y-2">
-          {mockNotes.map(note => (
-            <li
-              key={note.id}
-              className={`p-2 rounded cursor-pointer transition ${
-                note.active
-                  ? 'bg-slate-800 border-l-2 border-emerald-500'
-                  : 'hover:bg-slate-800'
-              }`}
-            >
-              <div className="text-sm text-white truncate">{note.title}</div>
-              <div className="text-xs text-slate-400 mt-1">
-                <span className="bg-slate-700 px-1 rounded">{note.tag}</span>
-              </div>
-            </li>
-          ))}
-        </ul>
+      <div className="px-4 pb-3 text-xs uppercase tracking-[0.2em] text-slate-400">Notes</div>
+      <div className="h-[calc(100%-230px)] overflow-y-auto px-3 pb-4">
+        {loading && notes.length === 0 ? (
+          <div className="px-2 py-6 text-center text-sm text-slate-300/70">加载中...</div>
+        ) : notes.length === 0 ? (
+          <div className="rounded-xl border border-slate-700/50 bg-slate-950/40 px-3 py-4 text-sm text-slate-300/70">
+            暂无笔记
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {notes.map(note => (
+              <li key={note.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelectNote(note.id)}
+                  className={`w-full rounded-xl border px-3 py-3 text-left transition ${
+                    selectedNoteId === note.id
+                      ? 'border-cyan-400/90 bg-cyan-400/12 text-white'
+                      : 'border-slate-700/50 bg-slate-950/35 text-slate-200 hover:border-slate-500/80 hover:bg-slate-900/50'
+                  }`}
+                >
+                  <p className="truncate text-sm font-medium">{note.title}</p>
+                  <p className="mt-1 text-[11px] text-slate-300/70">{INTENT_META[note.intent] || note.intent}</p>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {note.tags?.slice(0, 3).map(tag => (
+                      <span
+                        key={`${note.id}-${tag}`}
+                        className="rounded bg-slate-800/90 px-1.5 py-0.5 text-[10px] text-cyan-200"
+                      >
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
-      {/* 底部状态 */}
-      <div className="p-4 border-t border-slate-700 text-xs text-slate-500 flex justify-between">
-        <span>SQLite Connected</span>
-        <span className="text-emerald-400">● Online</span>
+      <div className="border-t border-slate-700/60 px-4 py-3 text-xs text-slate-300/80">
+        <span className="text-emerald-300">●</span> SQLite Connected
       </div>
     </aside>
-  )
+  );
 }
 
-// ── 主应用 ────────────────────────────────────────────────
+function MarkdownViewer({ note, loading, error }) {
+  if (loading) {
+    return (
+      <section className="note-panel flex items-center justify-center rounded-2xl border border-slate-200/80 bg-white/90">
+        <p className="text-sm text-slate-500">正在加载笔记内容...</p>
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section className="note-panel flex items-center justify-center rounded-2xl border border-rose-200 bg-rose-50 px-5 text-center">
+        <p className="text-sm text-rose-700">{error}</p>
+      </section>
+    );
+  }
+
+  if (!note) {
+    return (
+      <section className="note-panel flex items-center justify-center rounded-2xl border border-slate-200/80 bg-white/90 px-5 text-center">
+        <p className="text-sm text-slate-500">从左侧选择一篇笔记开始阅读。</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="note-panel overflow-hidden rounded-2xl border border-slate-200/80 bg-white/95">
+      <header className="border-b border-slate-200 px-5 py-4">
+        <h2 className="text-xl font-semibold text-slate-900">{note.title}</h2>
+        <p className="mt-1 text-xs text-slate-500">{note.file_path}</p>
+        <p className="mt-1 text-xs text-slate-400">最后更新: {new Date(note.file_mtime).toLocaleString()}</p>
+      </header>
+
+      <div className="h-[calc(100%-90px)] overflow-y-auto px-6 py-5">
+        <article className="markdown-body">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{note.markdown_content || ''}</ReactMarkdown>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function AgentStage({ visibleCount }) {
+  return (
+    <div className="rounded-2xl border border-slate-700 bg-slate-950 p-4 font-mono text-xs text-emerald-300">
+      <p className="text-slate-400">[System] BranchNote Agent is running...</p>
+      <div className="mt-3 space-y-2">
+        {AGENT_STAGES.map((stage, index) => (
+          <p
+            key={stage}
+            className={`${visibleCount > index ? 'opacity-100' : 'opacity-20'} transition-opacity duration-300`}
+          >
+            {stage} {visibleCount > index ? 'Done' : '...'}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MergeWorkspace({ session, applying, onAccept, onReject, onAcceptAll, onRejectAll, onApply }) {
+  const stats = useMemo(() => {
+    const total = session.hunks.length;
+    const accepted = session.hunks.filter(hunk => hunk.state === 'accepted').length;
+    const rejected = session.hunks.filter(hunk => hunk.state === 'rejected').length;
+    const pending = total - accepted - rejected;
+    return { total, accepted, rejected, pending };
+  }, [session.hunks]);
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-2xl border border-amber-200/70 bg-amber-50/85 p-3 text-xs text-amber-900">
+        <p className="font-semibold">MERGE 审阅模式</p>
+        <p className="mt-1">默认状态是 pending，只有 Accept 的块会写入最终稿。</p>
+        <p className="mt-1">
+          Hunk: {stats.total} | Accepted: {stats.accepted} | Rejected: {stats.rejected} | Pending: {stats.pending}
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={onAcceptAll}
+          className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
+        >
+          Accept All
+        </button>
+        <button
+          type="button"
+          onClick={onRejectAll}
+          className="rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+        >
+          Reject All
+        </button>
+      </div>
+
+      <div className="max-h-[280px] space-y-2 overflow-y-auto pr-1">
+        {session.hunks.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            没有检测到差异块，候选结果与原文一致。
+          </div>
+        ) : (
+          session.hunks.map((hunk, index) => (
+            <div key={hunk.id} className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-slate-600">Hunk {index + 1}</p>
+                <p className="text-[11px] uppercase tracking-wide text-slate-400">{hunk.state}</p>
+              </div>
+
+              <div className="mt-2 grid gap-2 md:grid-cols-2">
+                <div className="rounded-lg border border-rose-200 bg-rose-50 p-2">
+                  <p className="mb-1 text-[11px] text-rose-700">Old</p>
+                  <pre className="h-24 overflow-auto whitespace-pre-wrap text-xs text-rose-900">{hunk.oldText || '(空)'}</pre>
+                </div>
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2">
+                  <p className="mb-1 text-[11px] text-emerald-700">New</p>
+                  <pre className="h-24 overflow-auto whitespace-pre-wrap text-xs text-emerald-900">{hunk.newText || '(空)'}</pre>
+                </div>
+              </div>
+
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => onAccept(hunk.id)}
+                  className="rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
+                >
+                  Accept
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onReject(hunk.id)}
+                  className="rounded-md border border-slate-300 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+        <p className="mb-2 text-xs font-semibold text-slate-700">最终稿预览（将写回文件）</p>
+        <pre className="max-h-44 overflow-auto whitespace-pre-wrap rounded-lg bg-white p-2 text-xs text-slate-800">{session.finalContent}</pre>
+      </div>
+
+      <button
+        type="button"
+        onClick={onApply}
+        disabled={applying}
+        className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {applying ? '正在应用已接收改动...' : '应用已接收改动'}
+      </button>
+    </div>
+  );
+}
+
+function CreateConfirmWorkspace({ draft, committing, onCommit }) {
+  return (
+    <div className="space-y-3">
+      <div className="rounded-2xl border border-blue-200 bg-blue-50/90 p-3 text-xs text-blue-900">
+        <p className="font-semibold">CREATE 审阅模式（confirm）</p>
+        <p className="mt-1">该笔记尚未写入本地文件，确认后才会真正创建。</p>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+        <p className="text-xs font-semibold text-slate-700">预览标题</p>
+        <p className="mt-1 text-sm text-slate-900">{draft.suggested_title}</p>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+        <p className="mb-2 text-xs font-semibold text-slate-700">Markdown 预览</p>
+        <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-white p-2 text-xs text-slate-800">{draft.markdown_content}</pre>
+      </div>
+
+      <button
+        type="button"
+        onClick={onCommit}
+        disabled={committing}
+        className="w-full rounded-xl bg-blue-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {committing ? '正在创建...' : '确认创建笔记'}
+      </button>
+    </div>
+  );
+}
+
+function ResultHint({ result }) {
+  if (!result) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+        提交对话后，结果会在这里展示。
+      </div>
+    );
+  }
+
+  if (result.type === 'create_auto') {
+    return (
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/90 p-4 text-sm text-emerald-900">
+        <p className="font-semibold">CREATE 已完成</p>
+        <p className="mt-1">{result.title}</p>
+        <p className="mt-1 text-xs">{result.filePath}</p>
+      </div>
+    );
+  }
+
+  if (result.type === 'merge_applied') {
+    return (
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/90 p-4 text-sm text-emerald-900">
+        <p className="font-semibold">MERGE 已应用</p>
+        <p className="mt-1 text-xs">{result.filePath}</p>
+        {result.backupPath && <p className="mt-1 text-xs">备份: {result.backupPath}</p>}
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function AgentWorkspace({
+  inputText,
+  onInputChange,
+  createMode,
+  onCreateModeChange,
+  onSubmit,
+  status,
+  stageCount,
+  mergeSession,
+  onAcceptHunk,
+  onRejectHunk,
+  onAcceptAll,
+  onRejectAll,
+  applyingMerge,
+  onApplyMerge,
+  createDraft,
+  committingCreate,
+  onCommitCreate,
+  resultHint,
+  error,
+}) {
+  return (
+    <section className="agent-panel overflow-hidden rounded-2xl border border-slate-200/90 bg-white/95">
+      <header className="border-b border-slate-200 px-5 py-4">
+        <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Agent Workspace</p>
+        <h3 className="mt-1 text-xl font-semibold text-slate-900">可控知识提炼</h3>
+      </header>
+
+      <div className="h-[calc(100%-85px)] overflow-y-auto p-5">
+        <div className="space-y-3">
+          <label className="block text-sm font-medium text-slate-700">Raw Chat</label>
+          <textarea
+            value={inputText}
+            onChange={event => onInputChange(event.target.value)}
+            placeholder="粘贴你和 AI 的长对话..."
+            className="h-40 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:border-cyan-500 focus:outline-none"
+          />
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-slate-600">CREATE 策略:</span>
+            <button
+              type="button"
+              onClick={() => onCreateModeChange('auto')}
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                createMode === 'auto'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              auto
+            </button>
+            <button
+              type="button"
+              onClick={() => onCreateModeChange('confirm')}
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                createMode === 'confirm'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              confirm
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={status === 'loading'}
+            className="w-full rounded-xl bg-gradient-to-r from-cyan-600 to-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:from-cyan-500 hover:to-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {status === 'loading' ? 'Agent 运行中...' : '启动 Agent 任务'}
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {status === 'loading' && <AgentStage visibleCount={stageCount} />}
+
+          {status === 'error' && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {error || '请求失败，请检查后端服务'}
+            </div>
+          )}
+
+          {createDraft && (
+            <CreateConfirmWorkspace
+              draft={createDraft}
+              committing={committingCreate}
+              onCommit={onCommitCreate}
+            />
+          )}
+
+          {mergeSession && (
+            <MergeWorkspace
+              session={mergeSession}
+              applying={applyingMerge}
+              onAccept={onAcceptHunk}
+              onReject={onRejectHunk}
+              onAcceptAll={onAcceptAll}
+              onRejectAll={onRejectAll}
+              onApply={onApplyMerge}
+            />
+          )}
+
+          {!createDraft && !mergeSession && status !== 'loading' && <ResultHint result={resultHint} />}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function App() {
-  const [inputText, setInputText] = useState('')
-  const [mode, setMode] = useState('card')
-  const [status, setStatus] = useState('idle')       // 'idle' | 'loading' | 'success' | 'error'
-  const [visibleSteps, setVisibleSteps] = useState(0)
-  const [resultData, setResultData] = useState(null)
-  const timersRef = useRef([])
+  const [notes, setNotes] = useState([]);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [searchKeyword, setSearchKeyword] = useState('');
 
-  // loading 时逐步显示终端步骤
+  const [selectedNoteId, setSelectedNoteId] = useState(null);
+  const [selectedNoteDetail, setSelectedNoteDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState('');
+
+  const [inputText, setInputText] = useState('');
+  const [createMode, setCreateMode] = useState('auto');
+  const [agentStatus, setAgentStatus] = useState('idle');
+  const [agentError, setAgentError] = useState('');
+  const [stageCount, setStageCount] = useState(0);
+
+  const [createDraft, setCreateDraft] = useState(null);
+  const [mergeSession, setMergeSession] = useState(null);
+  const [resultHint, setResultHint] = useState(null);
+
+  const [committingCreate, setCommittingCreate] = useState(false);
+  const [applyingMerge, setApplyingMerge] = useState(false);
+
   useEffect(() => {
-    if (status !== 'loading') return
+    void refreshNotes('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    setVisibleSteps(0)
-    const delays = [800, 1800, 2800, 3600]
-    timersRef.current = delays.map((ms, i) =>
-      setTimeout(() => setVisibleSteps(i + 1), ms)
-    )
-    return () => timersRef.current.forEach(clearTimeout)
-  }, [status])
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void refreshNotes(searchKeyword);
+    }, 250);
 
-  async function handleSubmit() {
-    if (!inputText.trim()) return
-    setStatus('loading')
-    setResultData(null)
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchKeyword]);
 
-    // 动画至少跑满 4s，和真实请求并行，两者都完成才切换状态
-    const minDelay = new Promise(r => setTimeout(r, 4000))
+  useEffect(() => {
+    if (agentStatus !== 'loading') {
+      setStageCount(0);
+      return undefined;
+    }
+
+    setStageCount(0);
+    const timers = AGENT_STAGES.map((_, index) => (
+      setTimeout(() => {
+        setStageCount(index + 1);
+      }, 800 * (index + 1))
+    ));
+
+    return () => timers.forEach(clearTimeout);
+  }, [agentStatus]);
+
+  async function refreshNotes(keyword = '') {
+    setNotesLoading(true);
+    try {
+      const response = await getNotes(keyword);
+      const nextNotes = Array.isArray(response.notes) ? response.notes : [];
+      setNotes(nextNotes);
+
+      const hasCurrent = selectedNoteId && nextNotes.some(note => note.id === selectedNoteId);
+      const nextSelectedId = hasCurrent ? selectedNoteId : nextNotes[0]?.id || null;
+
+      if (!nextSelectedId) {
+        setSelectedNoteId(null);
+        setSelectedNoteDetail(null);
+        setDetailError('');
+        return;
+      }
+
+      if (nextSelectedId !== selectedNoteId) {
+        setSelectedNoteId(nextSelectedId);
+      }
+
+      await refreshNoteDetail(nextSelectedId);
+    } catch (error) {
+      console.error(error);
+      setDetailError(error.message || '获取笔记列表失败');
+    } finally {
+      setNotesLoading(false);
+    }
+  }
+
+  async function refreshNoteDetail(noteId) {
+    if (!noteId) {
+      return;
+    }
+
+    setDetailLoading(true);
+    setDetailError('');
 
     try {
-      const [json] = await Promise.all([
-        fetch('http://localhost:3000/api/process-chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ raw_text: inputText }),
-        }).then(r => r.json()),
-        minDelay,
-      ])
+      const detail = await getNoteDetail(noteId);
+      setSelectedNoteDetail(detail);
+    } catch (error) {
+      console.error(error);
+      setSelectedNoteDetail(null);
+      setDetailError(error.message || '加载笔记详情失败');
+    } finally {
+      setDetailLoading(false);
+    }
+  }
 
-      if (json.error) throw new Error(json.error)
-      setResultData(json)
-      setStatus('success')
-    } catch (err) {
-      setResultData({ message: err.message })
-      setStatus('error')
+  async function handleSelectNote(noteId) {
+    if (!noteId) {
+      return;
+    }
+
+    setSelectedNoteId(noteId);
+    await refreshNoteDetail(noteId);
+  }
+
+  async function handleSubmit() {
+    if (!inputText.trim()) {
+      return;
+    }
+
+    setAgentStatus('loading');
+    setAgentError('');
+    setCreateDraft(null);
+    setMergeSession(null);
+    setResultHint(null);
+
+    try {
+      const result = await processChat({
+        rawText: inputText,
+        createMode,
+      });
+
+      const executor = result.executor || {};
+
+      if (executor.action === 'MERGE') {
+        const session = buildMergeSession(executor.old_content, executor.proposed_content);
+        const nextSession = {
+          ...session,
+          noteId: executor.note_id,
+          filePath: executor.file_path,
+          baseHash: executor.base_hash,
+        };
+
+        setMergeSession(nextSession);
+        if (executor.note_id) {
+          setSelectedNoteId(executor.note_id);
+          await refreshNoteDetail(executor.note_id);
+        }
+      } else if (executor.action === 'CREATE' && executor.mode === 'confirm') {
+        setCreateDraft(executor.draft);
+      } else if (executor.action === 'CREATE' && executor.mode === 'auto') {
+        setResultHint({
+          type: 'create_auto',
+          title: executor.note?.title || '新笔记已创建',
+          filePath: executor.note?.file_path,
+        });
+
+        await refreshNotes(searchKeyword);
+        if (executor.note?.id) {
+          setSelectedNoteId(executor.note.id);
+          await refreshNoteDetail(executor.note.id);
+        }
+      }
+
+      setAgentStatus('success');
+    } catch (error) {
+      console.error(error);
+      setAgentStatus('error');
+      setAgentError(error.message || '请求失败');
+    }
+  }
+
+  async function handleCommitCreate() {
+    if (!createDraft || committingCreate) {
+      return;
+    }
+
+    setCommittingCreate(true);
+    try {
+      const response = await commitCreate(createDraft);
+      const note = response.note;
+
+      setResultHint({
+        type: 'create_auto',
+        title: note?.title || '新笔记已创建',
+        filePath: note?.file_path,
+      });
+      setCreateDraft(null);
+
+      await refreshNotes(searchKeyword);
+      if (note?.id) {
+        setSelectedNoteId(note.id);
+        await refreshNoteDetail(note.id);
+      }
+    } catch (error) {
+      console.error(error);
+      setAgentError(error.message || '创建失败');
+      setAgentStatus('error');
+    } finally {
+      setCommittingCreate(false);
+    }
+  }
+
+  async function handleApplyMerge() {
+    if (!mergeSession || applyingMerge) {
+      return;
+    }
+
+    setApplyingMerge(true);
+    try {
+      const response = await applyMerge({
+        noteId: mergeSession.noteId,
+        finalContent: mergeSession.finalContent,
+        baseHash: mergeSession.baseHash,
+        backup: true,
+      });
+
+      setResultHint({
+        type: 'merge_applied',
+        filePath: response.file_path,
+        backupPath: response.backup_path,
+      });
+      setMergeSession(null);
+
+      await refreshNotes(searchKeyword);
+      if (response.note_id) {
+        setSelectedNoteId(response.note_id);
+        await refreshNoteDetail(response.note_id);
+      }
+    } catch (error) {
+      console.error(error);
+      setAgentError(error.message || '应用合并失败');
+      setAgentStatus('error');
+    } finally {
+      setApplyingMerge(false);
     }
   }
 
   return (
-    <div className="bg-gray-50 text-gray-800 h-full flex overflow-hidden font-sans">
-      <Sidebar />
-
-      <main className="flex-1 flex flex-col h-full overflow-hidden">
-        <header className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center shadow-sm z-10">
-          <h2 className="text-lg font-semibold text-gray-700">知识提炼引擎 (Input Layer)</h2>
-          <div className="flex gap-3">
-            <button className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition">
-              导入 JSON
-            </button>
-            <button className="px-4 py-2 text-sm text-white bg-slate-800 hover:bg-slate-700 rounded-md transition">
-              VSCode 插件同步
-            </button>
-          </div>
-        </header>
-
-        <div className="flex-1 flex overflow-hidden bg-gray-50 p-6 gap-6">
-          <InputPanel
-            inputText={inputText}
-            onInputChange={setInputText}
-            mode={mode}
-            onModeChange={setMode}
-            onSubmit={handleSubmit}
-            loading={status === 'loading'}
+    <div className="app-shell h-full overflow-hidden text-slate-800">
+      <div className="h-full bg-[radial-gradient(180%_120%_at_15%_0%,#d9f5ff_0%,#edf2ff_38%,#f7f8fd_76%,#fcfcfe_100%)]">
+        <div className="mx-auto flex h-full max-w-[1800px] overflow-hidden p-4 lg:p-5">
+          <Sidebar
+            notes={notes}
+            loading={notesLoading}
+            searchKeyword={searchKeyword}
+            onSearchChange={setSearchKeyword}
+            selectedNoteId={selectedNoteId}
+            onSelectNote={handleSelectNote}
           />
-          <OutputPanel
-            status={status}
-            visibleSteps={visibleSteps}
-            resultData={resultData}
-          />
+
+          <main className="grid flex-1 grid-cols-1 gap-4 overflow-hidden pl-4 lg:grid-cols-[1.08fr_1fr]">
+            <MarkdownViewer
+              note={selectedNoteDetail}
+              loading={detailLoading}
+              error={detailError}
+            />
+
+            <AgentWorkspace
+              inputText={inputText}
+              onInputChange={setInputText}
+              createMode={createMode}
+              onCreateModeChange={setCreateMode}
+              onSubmit={handleSubmit}
+              status={agentStatus}
+              stageCount={stageCount}
+              mergeSession={mergeSession}
+              onAcceptHunk={hunkId => setMergeSession(current => updateHunkState(current, hunkId, 'accepted'))}
+              onRejectHunk={hunkId => setMergeSession(current => updateHunkState(current, hunkId, 'rejected'))}
+              onAcceptAll={() => setMergeSession(current => updateAllHunkState(current, 'accepted'))}
+              onRejectAll={() => setMergeSession(current => updateAllHunkState(current, 'rejected'))}
+              applyingMerge={applyingMerge}
+              onApplyMerge={handleApplyMerge}
+              createDraft={createDraft}
+              committingCreate={committingCreate}
+              onCommitCreate={handleCommitCreate}
+              resultHint={resultHint}
+              error={agentError}
+            />
+          </main>
         </div>
-      </main>
+      </div>
     </div>
-  )
+  );
 }

@@ -51,7 +51,14 @@ export function saveNote(noteData) {
   );
 
   console.log(`✅ [DB] 保存成功！changes=${result.changes}`);
-  return { id, title, intent, created_at };
+  return {
+    id,
+    title,
+    intent,
+    tags: parseTags(tags),
+    file_path,
+    created_at,
+  };
 }
 
 /**
@@ -75,6 +82,70 @@ export function searchNotes(keyword) {
   return rows.map(row => ({
     ...row,
     content: JSON.parse(row.content),
+    tags: parseTags(row.tags),
     embedding: row.embedding ? JSON.parse(row.embedding) : null,
   }));
+}
+
+/**
+ * 获取笔记元数据列表（不返回 markdown 正文）
+ * @param {string} keyword
+ * @returns {Array}
+ */
+export function listNotesMeta(keyword = '') {
+  const trimmed = typeof keyword === 'string' ? keyword.trim() : '';
+  const hasKeyword = trimmed.length > 0;
+  const like = `%${trimmed}%`;
+
+  const rows = hasKeyword
+    ? db.prepare(`
+      SELECT id, title, intent, tags, created_at, file_path
+      FROM knowledge_notes
+      WHERE title LIKE ? OR tags LIKE ? OR content LIKE ?
+      ORDER BY created_at DESC
+    `).all(like, like, like)
+    : db.prepare(`
+      SELECT id, title, intent, tags, created_at, file_path
+      FROM knowledge_notes
+      ORDER BY created_at DESC
+    `).all();
+
+  return rows.map(row => ({
+    ...row,
+    tags: parseTags(row.tags),
+  }));
+}
+
+/**
+ * 根据 id 获取单条笔记记录
+ * @param {string} id
+ * @returns {object | undefined}
+ */
+export function getNoteById(id) {
+  const row = db.prepare(`
+    SELECT id, title, intent, tags, created_at, file_path, content
+    FROM knowledge_notes
+    WHERE id = ?
+    LIMIT 1
+  `).get(id);
+
+  if (!row) {
+    return undefined;
+  }
+
+  return {
+    ...row,
+    tags: parseTags(row.tags),
+  };
+}
+
+function parseTags(tags) {
+  if (typeof tags !== 'string' || tags.trim().length === 0) {
+    return [];
+  }
+
+  return tags
+    .split(',')
+    .map(tag => tag.trim())
+    .filter(Boolean);
 }

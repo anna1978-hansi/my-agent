@@ -30,10 +30,20 @@ db.exec(`
     content     TEXT NOT NULL,
     tags        TEXT,
     raw_chat    TEXT,
+    file_path   TEXT,
     embedding   TEXT,
     created_at  TEXT NOT NULL
   )
 `);
+
+const columns = db.pragma('table_info(knowledge_notes)');
+const hasFilePath = columns.some(column => column.name === 'file_path');
+
+if (!hasFilePath) {
+  console.log('🏗️  [DB] 检测到缺失 file_path 列，自动升级...');
+  db.exec('ALTER TABLE knowledge_notes ADD COLUMN file_path TEXT');
+  console.log('✅ [DB] file_path 列升级完成！');
+}
 
 console.log('✅ [DB] knowledge_notes 表就绪！');
 

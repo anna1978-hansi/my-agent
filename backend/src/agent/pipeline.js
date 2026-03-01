@@ -9,9 +9,12 @@ const MAX_RETRIES = 2;
 /**
  * 完整的 Agent Pipeline：Router -> Worker -> Critic（带重试循环）
  * @param {string} chatText - 原始聊天记录
+ * @param {object} [options]
+ * @param {'auto' | 'confirm'} [options.create_mode]
  * @returns {Promise<object>} 最终结构化知识 + 元数据
  */
-export async function runPipeline(chatText) {
+export async function runPipeline(chatText, options = {}) {
+  const { create_mode = 'auto' } = options;
   console.log('\n🚀 [Pipeline] ===== 开始处理 =====');
   console.log(`🚀 [Pipeline] 输入长度: ${chatText.length} 字符`);
 
@@ -55,6 +58,7 @@ export async function runPipeline(chatText) {
     data: draft,
     raw_chat: chatText,
     embedding,
+    create_mode,
   });
 
   const result = {

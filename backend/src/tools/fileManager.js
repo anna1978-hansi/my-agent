@@ -138,13 +138,66 @@ export function create_new_markdown(payload) {
     throw new Error('create_new_markdown 需要有效的 payload');
   }
 
+  const draft = buildCreateDraft(payload);
+  return commitCreateDraft(draft);
+}
+
+/**
+ * 构建待确认的创建草稿（不落盘）
+ * @param {object} payload
+ * @param {string} payload.intent
+ * @param {object} payload.data
+ * @param {string} payload.raw_chat
+ * @param {number[] | null} payload.embedding
+ * @returns {object}
+ */
+export function buildCreateDraft(payload) {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('buildCreateDraft 需要有效的 payload');
+  }
+
   const { intent, data, raw_chat = '', embedding = null } = payload;
   if (!intent || !data) {
-    throw new Error('create_new_markdown 缺少 intent 或 data');
+    throw new Error('buildCreateDraft 缺少 intent 或 data');
   }
 
   const markdown = jsonToMarkdown(data, intent);
-  const filePath = saveMarkdownToFile(data.title || '(无标题)', markdown);
+
+  return {
+    intent,
+    data,
+    raw_chat,
+    embedding,
+    markdown_content: markdown,
+    suggested_title: data.title || '(无标题)',
+  };
+}
+
+/**
+ * 提交创建草稿并完成落盘 + 入库
+ * @param {object} draft
+ * @returns {object}
+ */
+export function commitCreateDraft(draft) {
+  if (!draft || typeof draft !== 'object') {
+    throw new Error('commitCreateDraft 需要有效的 draft');
+  }
+
+  const {
+    intent,
+    data,
+    raw_chat = '',
+    embedding = null,
+    markdown_content,
+    suggested_title,
+  } = draft;
+
+  if (!intent || !data || typeof markdown_content !== 'string') {
+    throw new Error('commitCreateDraft 缺少必要字段（intent/data/markdown_content）');
+  }
+
+  const title = suggested_title || data.title || '(无标题)';
+  const filePath = saveMarkdownToFile(title, markdown_content);
 
   const saved = saveNote({
     intent,
@@ -155,5 +208,8 @@ export function create_new_markdown(payload) {
   });
 
   console.log('✅ [FileManager] 创建并入库完成:', saved.id);
-  return { ...saved, file_path: filePath };
+  return {
+    ...saved,
+    file_path: filePath,
+  };
 }
