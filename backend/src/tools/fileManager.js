@@ -19,82 +19,148 @@ export function jsonToMarkdown(json, intent) {
   const title = json.title || '(无标题)';
 
   if (intent === 'BugFix') {
+    const symptom = pickText(json.problem, json.symptom);
+    const rootCause = pickText(json.root_cause, json.cause);
+    const solution = pickText(json.solution);
+    const prevention = pickText(json.prevention);
+    const steps = normalizeArray(json.steps);
+    const links = normalizeArray(json.links);
+
     return [
       `# ${title}`,
       '',
-      '## 问题描述',
-      json.problem || '',
+      '## 问题表现',
+      symptom,
+      '',
+      '## 根本原因',
+      rootCause,
       '',
       '## 复现步骤',
-      Array.isArray(json.steps) && json.steps.length > 0
-        ? json.steps.map((s, i) => `${i + 1}. ${s}`).join('\n')
-        : '',
+      steps.length > 0 ? steps.map((s, i) => `${i + 1}. ${s}`).join('\n') : '',
       '',
       '## 解决方案',
-      json.solution || '',
+      solution,
       '',
-      '## 影响范围',
-      json.impact || '',
+      '## 预防建议',
+      prevention,
       '',
       '## 关键链接',
-      Array.isArray(json.links) && json.links.length > 0
-        ? json.links.map(l => `- ${l}`).join('\n')
-        : '',
+      links.length > 0 ? links.map(link => `- ${link}`).join('\n') : '',
     ].join('\n');
   }
 
   if (intent === 'Concept') {
+    const coreDefinition = pickText(json.summary, json.core_definition);
+    const keyPoints = normalizeArray(json.key_points);
+    const useCases = normalizeArray(json.use_cases);
+    const links = normalizeArray(json.links);
+    const analogy = pickText(json.analogy);
+    const codeExample = pickText(json.code_example);
+
     return [
       `# ${title}`,
       '',
       '## 核心概念',
-      json.summary || '',
+      coreDefinition,
+      '',
+      '## 类比理解',
+      analogy,
       '',
       '## 关键要点',
-      Array.isArray(json.key_points) && json.key_points.length > 0
-        ? json.key_points.map(p => `- ${p}`).join('\n')
-        : '',
+      keyPoints.length > 0 ? keyPoints.map(point => `- ${point}`).join('\n') : '',
       '',
       '## 使用场景',
-      Array.isArray(json.use_cases) && json.use_cases.length > 0
-        ? json.use_cases.map(u => `- ${u}`).join('\n')
-        : '',
+      useCases.length > 0 ? useCases.map(useCase => `- ${useCase}`).join('\n') : '',
+      '',
+      '## 代码示例',
+      codeExample,
       '',
       '## 相关链接',
-      Array.isArray(json.links) && json.links.length > 0
-        ? json.links.map(l => `- ${l}`).join('\n')
-        : '',
+      links.length > 0 ? links.map(link => `- ${link}`).join('\n') : '',
     ].join('\n');
   }
 
   if (intent === 'Architecture') {
+    const overview = pickText(json.overview, json.context);
+    const components = normalizeArray(json.components);
+    const optionsCompared = normalizeArray(json.options_compared);
+    const decisions = normalizeArray(json.decisions);
+    const tradeoffs = normalizeArray(json.tradeoffs);
+    const finalDecision = pickText(json.final_decision);
+    const dataFlow = pickText(json.data_flow);
+    const prosCons = normalizeProsCons(json.pros_cons);
+
     return [
       `# ${title}`,
       '',
       '## 架构概览',
-      json.overview || '',
+      overview,
       '',
       '## 组件说明',
-      Array.isArray(json.components) && json.components.length > 0
-        ? json.components.map(c => `- ${c}`).join('\n')
-        : '',
+      components.length > 0 ? components.map(component => `- ${component}`).join('\n') : '',
+      '',
+      '## 方案对比',
+      optionsCompared.length > 0 ? optionsCompared.map(option => `- ${option}`).join('\n') : '',
+      '',
+      '## 优劣分析',
+      prosCons,
       '',
       '## 数据流',
-      json.data_flow || '',
+      dataFlow,
       '',
       '## 关键决策',
-      Array.isArray(json.decisions) && json.decisions.length > 0
-        ? json.decisions.map(d => `- ${d}`).join('\n')
-        : '',
+      decisions.length > 0
+        ? decisions.map(decision => `- ${decision}`).join('\n')
+        : finalDecision,
       '',
       '## 风险与权衡',
-      Array.isArray(json.tradeoffs) && json.tradeoffs.length > 0
-        ? json.tradeoffs.map(t => `- ${t}`).join('\n')
+      tradeoffs.length > 0
+        ? tradeoffs.map(tradeoff => `- ${tradeoff}`).join('\n')
         : '',
     ].join('\n');
   }
 
   throw new Error(`jsonToMarkdown 不支持的 intent: ${intent}`);
+}
+
+function pickText(...values) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return '';
+}
+
+function normalizeArray(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map(item => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean);
+}
+
+function normalizeProsCons(value) {
+  if (!value || typeof value !== 'object') {
+    return '';
+  }
+
+  const lines = [];
+  for (const [option, detail] of Object.entries(value)) {
+    lines.push(`### ${option}`);
+    const pros = normalizeArray(detail?.pros);
+    const cons = normalizeArray(detail?.cons);
+    if (pros.length > 0) {
+      lines.push('- 优点');
+      lines.push(...pros.map(item => `  - ${item}`));
+    }
+    if (cons.length > 0) {
+      lines.push('- 缺点');
+      lines.push(...cons.map(item => `  - ${item}`));
+    }
+  }
+  return lines.join('\n');
 }
 
 /**

@@ -150,6 +150,10 @@ app.post('/api/notes/apply-merge', (req, res) => {
     return res.status(400).json({ error: 'final_content 必须是字符串' });
   }
 
+  if (!base_hash || typeof base_hash !== 'string') {
+    return res.status(400).json({ error: 'base_hash 不能为空' });
+  }
+
   try {
     const note = getNoteById(note_id);
 
@@ -164,7 +168,7 @@ app.post('/api/notes/apply-merge', (req, res) => {
     const currentContent = fs.readFileSync(note.file_path, 'utf8');
     const currentHash = hashMarkdown(currentContent);
 
-    if (base_hash && base_hash !== currentHash) {
+    if (base_hash !== currentHash) {
       return res.status(409).json({
         error: 'base_hash 不匹配，文件可能已被外部修改',
         current_hash: currentHash,

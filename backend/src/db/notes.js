@@ -20,9 +20,12 @@ export function saveNote(noteData) {
   const id = randomUUID();
   const title = data.title ?? '(无标题)';
   const content = JSON.stringify(data);
-  const tags = Array.isArray(data.use_cases)
-    ? data.use_cases.slice(0, 3).join(',')
-    : '';
+  const tagsList = Array.isArray(data.tags)
+    ? data.tags
+    : Array.isArray(data.use_cases)
+      ? data.use_cases
+      : [];
+  const tags = tagsList.slice(0, 8).join(',');
   const created_at = new Date().toISOString();
 
   console.log(`💾 [DB] 保存笔记 → id=${id}, intent=${intent}, title="${title}"`);

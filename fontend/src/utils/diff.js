@@ -1,9 +1,11 @@
+import { diffLines } from 'diff';
+
 const HUNK_STATES = new Set(['pending', 'accepted', 'rejected']);
 
 export function buildMergeSession(oldContent, proposedContent) {
-  const oldBlocks = splitBlocks(oldContent);
-  const newBlocks = splitBlocks(proposedContent);
-  const operations = diffBlocks(oldBlocks, newBlocks);
+  const oldText = normalizeText(oldContent);
+  const newText = normalizeText(proposedContent);
+  const tokens = diffLines(oldText, newText);
 
   const segments = [];
   const hunks = [];
@@ -11,32 +13,27 @@ export function buildMergeSession(oldContent, proposedContent) {
   let pointer = 0;
   let hunkCounter = 1;
 
-  while (pointer < operations.length) {
-    const current = operations[pointer];
+  while (pointer < tokens.length) {
+    const current = tokens[pointer];
 
-    if (current.type === 'context') {
-      const contextBlocks = [];
-      while (pointer < operations.length && operations[pointer].type === 'context') {
-        contextBlocks.push(operations[pointer].value);
-        pointer += 1;
-      }
+    if (!current.added && !current.removed) {
       segments.push({
         type: 'context',
-        blocks: contextBlocks,
+        text: current.value,
       });
+      pointer += 1;
       continue;
     }
 
-    const oldChunk = [];
-    const newChunk = [];
+    let oldChunk = '';
+    let newChunk = '';
 
-    while (pointer < operations.length && operations[pointer].type !== 'context') {
-      const op = operations[pointer];
-      if (op.type === 'remove') {
-        oldChunk.push(op.value);
+    while (pointer < tokens.length && (tokens[pointer].added || tokens[pointer].removed)) {
+      if (tokens[pointer].removed) {
+        oldChunk += tokens[pointer].value;
       }
-      if (op.type === 'add') {
-        newChunk.push(op.value);
+      if (tokens[pointer].added) {
+        newChunk += tokens[pointer].value;
       }
       pointer += 1;
     }
@@ -46,10 +43,8 @@ export function buildMergeSession(oldContent, proposedContent) {
 
     hunks.push({
       id: hunkId,
-      oldText: oldChunk.join('\n\n'),
-      newText: newChunk.join('\n\n'),
-      oldBlocks: oldChunk,
-      newBlocks: newChunk,
+      oldText: oldChunk,
+      newText: newChunk,
       state: 'pending',
     });
 
@@ -60,8 +55,8 @@ export function buildMergeSession(oldContent, proposedContent) {
   }
 
   return {
-    oldContent: normalizeText(oldContent),
-    proposedContent: normalizeText(proposedContent),
+    oldContent: oldText,
+    proposedContent: newText,
     segments,
     hunks,
     finalContent: computeFinalContent(segments, hunks),
@@ -113,85 +108,23 @@ export function updateAllHunkState(session, nextState) {
 
 function computeFinalContent(segments, hunks) {
   const hunkMap = new Map(hunks.map(hunk => [hunk.id, hunk]));
-  const outputBlocks = [];
 
-  for (const segment of segments) {
+  return segments.map(segment => {
     if (segment.type === 'context') {
-      outputBlocks.push(...segment.blocks);
-      continue;
+      return segment.text;
     }
 
     const hunk = hunkMap.get(segment.hunkId);
     if (!hunk) {
-      continue;
+      return '';
     }
 
-    if (hunk.state === 'accepted') {
-      outputBlocks.push(...hunk.newBlocks);
-    } else {
-      outputBlocks.push(...hunk.oldBlocks);
-    }
-  }
-
-  return outputBlocks.join('\n\n');
-}
-
-function splitBlocks(content) {
-  const normalized = normalizeText(content);
-  if (!normalized) {
-    return [];
-  }
-  return normalized.split(/\n{2,}/);
+    return hunk.state === 'accepted' ? hunk.newText : hunk.oldText;
+  }).join('');
 }
 
 function normalizeText(content) {
   return typeof content === 'string'
-    ? content.replace(/\r\n/g, '\n').trim()
+    ? content.replace(/\r\n/g, '\n')
     : '';
-}
-
-function diffBlocks(oldBlocks, newBlocks) {
-  const m = oldBlocks.length;
-  const n = newBlocks.length;
-  const matrix = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
-
-  for (let i = m - 1; i >= 0; i -= 1) {
-    for (let j = n - 1; j >= 0; j -= 1) {
-      if (oldBlocks[i] === newBlocks[j]) {
-        matrix[i][j] = matrix[i + 1][j + 1] + 1;
-      } else {
-        matrix[i][j] = Math.max(matrix[i + 1][j], matrix[i][j + 1]);
-      }
-    }
-  }
-
-  const operations = [];
-  let i = 0;
-  let j = 0;
-
-  while (i < m && j < n) {
-    if (oldBlocks[i] === newBlocks[j]) {
-      operations.push({ type: 'context', value: oldBlocks[i] });
-      i += 1;
-      j += 1;
-    } else if (matrix[i + 1][j] >= matrix[i][j + 1]) {
-      operations.push({ type: 'remove', value: oldBlocks[i] });
-      i += 1;
-    } else {
-      operations.push({ type: 'add', value: newBlocks[j] });
-      j += 1;
-    }
-  }
-
-  while (i < m) {
-    operations.push({ type: 'remove', value: oldBlocks[i] });
-    i += 1;
-  }
-
-  while (j < n) {
-    operations.push({ type: 'add', value: newBlocks[j] });
-    j += 1;
-  }
-
-  return operations;
 }
