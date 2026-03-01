@@ -2,7 +2,6 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { runPipeline } from './agent/pipeline.js';
-import { saveNote } from './db/notes.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -30,24 +29,16 @@ app.post('/api/process-chat', async (req, res) => {
     const pipelineResult = await runPipeline(raw_text);
     console.log(`🌐 [Server] Pipeline 完成，intent=${pipelineResult.intent}, score=${pipelineResult.score}`);
 
-    // 2. 存入数据库
-    const saved = saveNote({
-      intent: pipelineResult.intent,
-      data: pipelineResult.data,
-      raw_chat: raw_text,
-    });
-    console.log(`🌐 [Server] 已存库，id=${saved.id}`);
-
-    // 3. 返回结果
+    // 2. 返回结果
     res.json({
       success: true,
-      note_id: saved.id,
       intent: pipelineResult.intent,
       confidence: pipelineResult.confidence,
       score: pipelineResult.score,
       is_passed: pipelineResult.is_passed,
       retries: pipelineResult.retries,
       data: pipelineResult.data,
+      executor: pipelineResult.executor,
     });
   } catch (err) {
     console.error('❌ [Server] 处理失败:', err.message);

@@ -35,7 +35,7 @@ async function run() {
       links: ['https://react.dev'],
     },
     raw_chat: '补充一些 React hooks 的性能优化知识',
-    embedding: await generateEmbedding('React hooks 性能优化 useMemo useCallback'),
+    embedding: await generateEmbedding('补充一些 React hooks 的性能优化知识'),
     threshold: 0.75,
   };
 
@@ -54,7 +54,7 @@ async function run() {
       links: [],
     },
     raw_chat: 'Docker 是什么？镜像与容器的区别？',
-    embedding: await generateEmbedding('Docker 镜像 容器 Dockerfile'),
+    embedding: await generateEmbedding('Docker 是什么？镜像与容器的区别？'),
     threshold: 0.75,
   };
 

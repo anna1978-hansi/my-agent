@@ -1,6 +1,8 @@
 import { routeIntent } from './router.js';
 import { extractKnowledge } from './worker.js';
 import { critiqueNote } from './critic.js';
+import { executeKnowledge } from './executor.js';
+import { generateEmbedding } from '../tools/rag.js';
 
 const MAX_RETRIES = 2;
 
@@ -46,6 +48,15 @@ export async function runPipeline(chatText) {
     feedback = critique.feedback;
   }
 
+  console.log('\n🚀 [Pipeline] Step 4: Executor 执行创建/合并');
+  const embedding = await generateEmbedding(chatText);
+  const executorResult = await executeKnowledge({
+    intent,
+    data: draft,
+    raw_chat: chatText,
+    embedding,
+  });
+
   const result = {
     intent,
     confidence,
@@ -53,6 +64,7 @@ export async function runPipeline(chatText) {
     is_passed: critique.is_passed,
     retries,
     data: draft,
+    executor: executorResult,
   };
 
   console.log('\n🚀 [Pipeline] ===== 处理完成 =====');
