@@ -38,6 +38,10 @@ export function buildMergeSession(oldContent, proposedContent) {
       pointer += 1;
     }
 
+    if (isBlankChunk(oldChunk) && isBlankChunk(newChunk)) {
+      continue;
+    }
+
     const hunkId = `hunk-${hunkCounter}`;
     hunkCounter += 1;
 
@@ -127,4 +131,8 @@ function normalizeText(content) {
   return typeof content === 'string'
     ? content.replace(/\r\n/g, '\n')
     : '';
+}
+
+function isBlankChunk(value) {
+  return typeof value !== 'string' || value.trim().length === 0;
 }
