@@ -20,9 +20,14 @@ export async function executeKnowledge(payload) {
   }
 
   const title = data.title || '(无标题)';
+  const queryText = raw_chat && raw_chat.trim().length > 0 ? raw_chat : title;
   console.log('🧠 [Executor] 开始执行，标题:', title);
+  console.log('🧠 [Executor] 检索文本:', queryText.slice(0, 80));
 
-  const result = await searchSimilarNote(title, typeof threshold === 'number' ? threshold : 0.85);
+  const result = await searchSimilarNote(
+    queryText,
+    typeof threshold === 'number' ? threshold : 0.85
+  );
 
   if (result.action === 'MERGE' && result.note?.file_path) {
     console.log('🧵 [Executor] 命中相似笔记，开始合并...');
