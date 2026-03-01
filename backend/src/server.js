@@ -196,11 +196,26 @@ app.post('/api/notes/apply-merge', (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`\n🚀 [Server] BranchNote Engine 已启动`);
+  console.log(`🚀 [Server] PID: ${process.pid}`);
   console.log(`🚀 [Server] 地址: http://localhost:${PORT}`);
   console.log(`🚀 [Server] 接口: POST http://localhost:${PORT}/api/process-chat`);
 });
+
+server.on('error', (err) => {
+  console.error('❌ [Server] 监听端口失败:', err);
+});
+
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => {
+    console.log(`\n🛑 [Server] 收到 ${signal}，准备退出...`);
+    server.close(() => {
+      console.log('✅ [Server] HTTP Server 已关闭');
+      process.exit(0);
+    });
+  });
+}
 
 function normalizeCreateMode(mode) {
   if (mode == null) {
