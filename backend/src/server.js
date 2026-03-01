@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './config/loadEnv.js';
 import fs from 'fs';
 import { createHash } from 'crypto';
 import express from 'express';

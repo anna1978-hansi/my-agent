@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import '../config/loadEnv.js';
 import OpenAI from 'openai';
 import db from '../db/index.js';
 
