@@ -18,6 +18,16 @@ export async function generateEmbedding(text) {
     throw new Error('generateEmbedding 需要非空字符串作为输入');
   }
 
+  const baseUrl = process.env.BASE_URL;
+  const apiKey = process.env.OPENAI_API_KEY || '';
+  const keyMasked = apiKey ? `${apiKey.slice(0, 6)}...${apiKey.slice(-4)}` : '(empty)';
+
+  console.log('🔎 [RAG] BASE_URL:', baseUrl || '(undefined)');
+  console.log('🔎 [RAG] OPENAI_API_KEY:', keyMasked);
+  if (baseUrl) {
+    console.log('🔎 [RAG] 预期 Embeddings URL:', `${baseUrl.replace(/\/$/, '')}/v1/embeddings`);
+  }
+
   console.log('🧠 [RAG] 开始生成 Embedding...');
   console.log('🧠 [RAG] 模型:', EMBEDDING_MODEL);
   console.log('🧠 [RAG] 文本长度:', text.length);
