@@ -9,7 +9,13 @@ import db from './index.js';
  * @param {string} noteData.raw_chat - 原始对话文本
  */
 export function saveNote(noteData) {
-  const { intent, data, raw_chat = '' } = noteData;
+  const {
+    intent,
+    data,
+    raw_chat = '',
+    file_path = null,
+    embedding = null,
+  } = noteData;
 
   const id = randomUUID();
   const title = data.title ?? '(无标题)';
@@ -21,12 +27,28 @@ export function saveNote(noteData) {
 
   console.log(`💾 [DB] 保存笔记 → id=${id}, intent=${intent}, title="${title}"`);
 
+  const embeddingText = Array.isArray(embedding)
+    ? JSON.stringify(embedding)
+    : typeof embedding === 'string'
+      ? embedding
+      : null;
+
   const stmt = db.prepare(`
-    INSERT INTO knowledge_notes (id, title, intent, content, tags, raw_chat, embedding, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
+    INSERT INTO knowledge_notes (id, title, intent, content, tags, raw_chat, file_path, embedding, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
-  const result = stmt.run(id, title, intent, content, tags, raw_chat, created_at);
+  const result = stmt.run(
+    id,
+    title,
+    intent,
+    content,
+    tags,
+    raw_chat,
+    file_path,
+    embeddingText,
+    created_at
+  );
 
   console.log(`✅ [DB] 保存成功！changes=${result.changes}`);
   return { id, title, intent, created_at };
@@ -42,7 +64,7 @@ export function searchNotes(keyword) {
 
   const like = `%${keyword}%`;
   const rows = db.prepare(`
-    SELECT id, title, intent, tags, created_at, content
+    SELECT id, title, intent, tags, created_at, content, file_path, embedding
     FROM knowledge_notes
     WHERE title LIKE ? OR content LIKE ? OR tags LIKE ?
     ORDER BY created_at DESC
@@ -53,5 +75,6 @@ export function searchNotes(keyword) {
   return rows.map(row => ({
     ...row,
     content: JSON.parse(row.content),
+    embedding: row.embedding ? JSON.parse(row.embedding) : null,
   }));
 }
