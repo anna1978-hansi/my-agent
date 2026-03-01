@@ -44,7 +44,7 @@ async function run() {
 
   const queryText = '如何使用 React hooks 管理组件状态？';
   console.log('\n🔎 [TestRAG] 开始相似度检索...');
-  const result = await searchSimilarNote(queryText, 0.0);
+  const result = await searchSimilarNote(queryText, 0.75);
 
   console.log('📦 [TestRAG] 检索结果:');
   //console.log(JSON.stringify(result, null, 2));
