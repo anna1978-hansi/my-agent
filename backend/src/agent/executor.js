@@ -35,7 +35,7 @@ export async function executeKnowledge(payload) {
 
   const result = await searchSimilarNote(
     queryText,
-    typeof threshold === 'number' ? threshold : 0.85
+    typeof threshold === 'number' ? threshold : 0.7
   );
 
   if (result.action === 'MERGE' && result.note?.file_path) {
