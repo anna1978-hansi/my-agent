@@ -47,7 +47,7 @@ async function run() {
   const result = await searchSimilarNote(queryText, 0.0);
 
   console.log('📦 [TestRAG] 检索结果:');
-  console.log(JSON.stringify(result, null, 2));
+  //console.log(JSON.stringify(result, null, 2));
 
   const title = result.note?.title || '(none)';
   const score = typeof result.score === 'number' ? result.score : null;
