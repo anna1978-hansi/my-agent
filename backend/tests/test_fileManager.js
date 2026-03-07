@@ -1,4 +1,4 @@
-import { jsonToMarkdown } from './fileManager.js';
+import { jsonToMarkdown } from '../src/tools/fileManager.js';
 
 console.log('🧪 [TestFileManager] 开始测试 jsonToMarkdown...');
 

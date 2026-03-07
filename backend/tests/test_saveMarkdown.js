@@ -1,4 +1,4 @@
-import { jsonToMarkdown, saveMarkdownToFile } from './fileManager.js';
+import { jsonToMarkdown, saveMarkdownToFile } from '../src/tools/fileManager.js';
 
 console.log('🧪 [TestSaveMarkdown] 开始测试 saveMarkdownToFile...');
 

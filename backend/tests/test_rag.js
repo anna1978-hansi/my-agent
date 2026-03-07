@@ -1,5 +1,5 @@
-import { saveNote } from '../db/notes.js';
-import { generateEmbedding, searchSimilarNote } from './rag.js';
+import { saveNote } from '../src/db/notes.js';
+import { generateEmbedding, searchSimilarNote } from '../src/tools/rag.js';
 
 async function run() {
   console.log('🧪 [TestRAG] 开始准备测试数据...');

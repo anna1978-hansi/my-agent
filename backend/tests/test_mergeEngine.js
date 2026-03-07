@@ -1,4 +1,4 @@
-import { proposeMerge } from './mergeEngine.js';
+import { proposeMerge } from '../src/tools/mergeEngine.js';
 
 async function run() {
   console.log('🧪 [TestMergeEngine] 开始测试 proposeMerge...');

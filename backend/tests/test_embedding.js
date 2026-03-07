@@ -1,4 +1,4 @@
-import { generateEmbedding } from './rag.js';
+import { generateEmbedding } from '../src/tools/rag.js';
 
 async function run() {
   const text = 'This is a short test sentence for embedding generation.';

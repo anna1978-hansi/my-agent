@@ -1,4 +1,4 @@
-import { cosineSimilarity } from './rag.js';
+import { cosineSimilarity } from '../src/tools/rag.js';
 
 console.log('🧪 [TestSimilarity] 开始测试 cosineSimilarity...');
 

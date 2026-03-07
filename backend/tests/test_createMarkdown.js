@@ -1,5 +1,5 @@
-import { generateEmbedding } from './rag.js';
-import { create_new_markdown } from './fileManager.js';
+import { generateEmbedding } from '../src/tools/rag.js';
+import { create_new_markdown } from '../src/tools/fileManager.js';
 
 async function run() {
   console.log('🧪 [TestCreateMarkdown] 开始测试 create_new_markdown...');
