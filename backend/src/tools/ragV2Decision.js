@@ -7,6 +7,7 @@ export const DECISION_THRESHOLDS = Object.freeze({
   fallback_update_best_min: 0.7,
   fallback_update_margin_min: 0.03,
 });
+const EPSILON = 1e-9;
 
 /**
  * Task 8: 决策引擎
@@ -54,7 +55,10 @@ export async function decideCreateOrUpdate(queryText, rerankRows, options = {}) 
   const bestScore = Number(top.rerank_score);
   const margin = second ? bestScore - Number(second.rerank_score) : 1;
 
-  if (bestScore >= DECISION_THRESHOLDS.update_best_min && margin >= DECISION_THRESHOLDS.update_margin_min) {
+  if (
+    isGte(bestScore, DECISION_THRESHOLDS.update_best_min) &&
+    isGte(margin, DECISION_THRESHOLDS.update_margin_min)
+  ) {
     return buildUpdateDecision('rule_high_confidence', top, bestScore, margin, 'high confidence by rules');
   }
 
@@ -108,8 +112,8 @@ export async function decideCreateOrUpdate(queryText, rerankRows, options = {}) 
 
 function fallbackByRules(top, bestScore, margin, reason) {
   if (
-    bestScore >= DECISION_THRESHOLDS.fallback_update_best_min &&
-    margin >= DECISION_THRESHOLDS.fallback_update_margin_min
+    isGte(bestScore, DECISION_THRESHOLDS.fallback_update_best_min) &&
+    isGte(margin, DECISION_THRESHOLDS.fallback_update_margin_min)
   ) {
     return buildUpdateDecision('fallback_rule_after_llm_error', top, bestScore, margin, reason);
   }
@@ -191,3 +195,6 @@ ${JSON.stringify({ best_score: payload.best_score, margin: payload.margin }, nul
   return callLLM(userPrompt, systemPrompt, true);
 }
 
+function isGte(a, b) {
+  return a > b || Math.abs(a - b) <= EPSILON;
+}

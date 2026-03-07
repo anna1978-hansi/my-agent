@@ -71,6 +71,18 @@ async function testRuleLowConfidenceBranch() {
   assert(result.decision_method === 'rule_low_confidence', 'rule_low_confidence method 错误');
 }
 
+async function testRuleBoundaryInclusiveBranch() {
+  console.log('[TestDecision] 🧪 case=rule_boundary_inclusive');
+  const result = await decideCreateOrUpdate('react hooks', [
+    buildRow('note-a', 0.82, 'React A'),
+    buildRow('note-b', 0.74, 'React B'),
+  ]);
+  console.log('[TestDecision] 📦 rule_boundary_result=', JSON.stringify(result, null, 2));
+
+  assert(result.action === 'UPDATE', 'rule_boundary_inclusive 应 UPDATE');
+  assert(result.decision_method === 'rule_high_confidence', 'rule_boundary_inclusive method 错误');
+}
+
 async function testLLMDecisionUpdateBranch() {
   console.log('[TestDecision] 🧪 case=llm_update');
   const result = await decideCreateOrUpdate(
@@ -162,6 +174,7 @@ async function run() {
   await testNoCandidateBranch();
   await testRuleHighConfidenceBranch();
   await testRuleLowConfidenceBranch();
+  await testRuleBoundaryInclusiveBranch();
   await testLLMDecisionUpdateBranch();
   await testLLMDecisionCreateBranch();
   await testLLMInvalidPayloadFallbackBranch();
@@ -173,4 +186,3 @@ run().catch(err => {
   console.error('[TestDecision] ❌ 测试失败:', err.message);
   process.exit(1);
 });
-
