@@ -97,6 +97,34 @@ export function listIndexableNotes(noteIds = null) {
   return rows.filter(row => idSet.has(row.id));
 }
 
+export function buildFakeEmbedding(text) {
+  const source = typeof text === 'string' ? text : '';
+  const len = source.length;
+  let checksum = 0;
+  for (let i = 0; i < source.length; i += 1) {
+    checksum = (checksum + source.charCodeAt(i)) % 104729;
+  }
+
+  return [
+    Number((len / 2000).toFixed(8)),
+    Number((checksum / 104729).toFixed(8)),
+    Number((((len + checksum) % 997) / 997).toFixed(8)),
+  ];
+}
+
+function resolveEmbeddingFn(options) {
+  if (typeof options.embeddingFn === 'function') {
+    return options.embeddingFn;
+  }
+
+  if (process.env.RAG_V2_USE_FAKE_EMBEDDING === '1') {
+    console.log('[Indexer] 🧪 使用本地 fake embedding 模式');
+    return async text => buildFakeEmbedding(text);
+  }
+
+  return generateEmbedding;
+}
+
 export async function indexNoteById(noteId, options = {}) {
   if (!noteId || typeof noteId !== 'string') {
     throw new Error('indexNoteById 需要 noteId 字符串');
@@ -116,7 +144,7 @@ export async function indexNoteById(noteId, options = {}) {
 }
 
 export async function indexSingleNote(note, options = {}) {
-  const embeddingFn = typeof options.embeddingFn === 'function' ? options.embeddingFn : generateEmbedding;
+  const embeddingFn = resolveEmbeddingFn(options);
   const chunkOptions = options.chunkOptions || {};
   const noteId = note?.id;
   const noteTitle = note?.title || '(无标题)';
@@ -243,4 +271,3 @@ export async function reindexAllNotes(options = {}) {
     results,
   };
 }
-

@@ -7,6 +7,7 @@
 import fs from 'fs';
 import path from 'path';
 import { saveNote } from '../db/notes.js';
+import { indexNoteById } from './chunkIndexer.js';
 
 export function jsonToMarkdown(json, intent) {
   if (!json || typeof json !== 'object') {
@@ -272,6 +273,16 @@ export function commitCreateDraft(draft) {
     file_path: filePath,
     embedding,
   });
+
+  // Task 4: CREATE 成功后立即触发 chunk 索引（不阻塞主创建流程）
+  void indexNoteById(saved.id)
+    .then(indexResult => {
+      console.log(`[IndexerHook] 🧱 CREATE 索引完成 note_id=${saved.id}`);
+      console.log(`[IndexerHook] 🧱 CREATE 索引结果: ${JSON.stringify(indexResult, null, 2)}`);
+    })
+    .catch(err => {
+      console.log(`[IndexerHook] ⚠️ CREATE 索引失败 note_id=${saved.id}, err=${err.message}`);
+    });
 
   console.log('✅ [FileManager] 创建并入库完成:', saved.id);
   return {

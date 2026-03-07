@@ -6,6 +6,7 @@ import cors from 'cors';
 import { runPipeline } from './agent/pipeline.js';
 import { commitCreateDraft } from './tools/fileManager.js';
 import { getNoteById, listNotesMeta } from './db/notes.js';
+import { indexNoteById } from './tools/chunkIndexer.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -134,7 +135,7 @@ app.post('/api/notes/commit-create', (req, res) => {
 });
 
 // ── MERGE 应用（含 hash 校验 + 备份） ─────────────────────────
-app.post('/api/notes/apply-merge', (req, res) => {
+app.post('/api/notes/apply-merge', async (req, res) => {
   const {
     note_id,
     final_content,
@@ -182,12 +183,16 @@ app.post('/api/notes/apply-merge', (req, res) => {
     }
 
     fs.writeFileSync(note.file_path, final_content, 'utf8');
+    console.log(`[IndexerHook] 🧱 MERGE 已写入文件，开始重建索引 note_id=${note_id}`);
+    const indexResult = await indexNoteById(note_id);
+    console.log(`[IndexerHook] 🧱 MERGE 索引结果: ${JSON.stringify(indexResult, null, 2)}`);
 
     res.json({
       success: true,
       note_id,
       file_path: note.file_path,
       backup_path: backupPath,
+      index_result: indexResult,
       updated_at: new Date().toISOString(),
     });
   } catch (err) {
